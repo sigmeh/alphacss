@@ -3,24 +3,38 @@
 
 Usage:
 	
-	$ python alphacss.py filename
+	$ python alphacss.py filename.css
+	
+
+Alternative usage (access script in any working directory using a .bashrc function:
+	 
+in .bashrc:
+	
+	acss(){
+		python path-to-alphacss.py-file `pwd`/$@
+	}
+
+Then:
+
+	$ acss filename.css	 	
 	
 '''
+
 import sys
 import os
 import re
 
 def main():
 	if len(sys.argv) > 1:
-		filename = sys.argv[1]
+		filepath = sys.argv[1]
 	else:
 		print 'Supply filename as argument'
 		sys.exit()
 		
-	with open(filename,'r') as f:
+	with open(filepath,'r') as f:
 		doc = f.read()
 	
-	with open(filename + '_original', 'w') as f:	#save original css file
+	with open(filepath + '_original', 'w') as f:	#save original css file
 		f.write(doc)
 	
 	el_dict = {}
@@ -40,7 +54,7 @@ def main():
 	
 	doc = ''.join( [el_dict[y] for y in sorted(el_dict, key=lambda x: re.search('\w+.*',x.lower()).group()) ] )
 	
-	with open(filename, 'w') as f:
+	with open(filepath, 'w') as f:
 		f.write(doc)
 
 
