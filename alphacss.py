@@ -3,7 +3,7 @@
 
 Usage:
 	
-	$ python alphacss.py filename.css
+	$ python alphacss.py filepath/filename.css
 	
 
 Alternative usage (access script in any working directory using a .bashrc function:
@@ -17,6 +17,21 @@ in .bashrc:
 Then:
 
 	$ acss filename.css	 	
+
+
+
+  Steps:
+	1.  Separate out all css elements according to re.findall selector ...{...}
+	2.  Remove any \n\t, \n, and \t preceded by ';'
+	3.  Replace any remaining \t with ' '
+	4.  Replace multiple spaces with single space
+	
+	5.  Separate element selector from attributes and remove curly braces
+	6.  Extract comments from attrs string
+	7.  Create dict obj for each css element, composed of css { property1: value1, prop2: val2, ... } pairs
+	8.  Add 'comments' property to el_dict[el], as list of /* ... */ comments
+	9.  Sort elements alphabetically as el_list, ignoring any starting '.' or '#'
+	10. Create new css doc formatted for viewing as standard css file	
 	
 '''
 
@@ -35,55 +50,30 @@ def main():
 	with open(filepath,'r') as f:
 		doc = f.read()
 	
-	with open(filepath + '_original', 'w') as f:	#save original css file
+	with open(filepath + '_original', 'w') as f:	#save original css file 
 		f.write(doc)
 	
 	el_dict = {}
-	
-	'''
-	  Create list of css elements from target document
-	1. Separate out all css elements according to re.findall selector ...{...}
-	2. Remove any \n\t, \n, and \t preceded by ';'
-	3. Replace any remaining \t with ' '
-	4. Replace multiple spaces with single space
-	
-	5. Separate element selector from properties and remove curly braces
-	use properties as dict entry for each el 
-	6. Sort entries, ignoring any starting '.' or '#'
-	7. 
-	'''
 	
 	els = [re.sub('\ {2,}',' ',re.sub('\n\t|\n|\t(?<=\;)','',x).replace('\t',' ')) for x in re.findall('[^{}]*\{[^{}]*\}',doc)]
 	
 	for entry in els: 
 		el = re.search('.*(?={)',entry).group()
 		attrs = re.sub('{|}','',re.search('\{(.*?)\}',entry).group())
-		comment = re.search('\/\*[^^]*\*\/',attrs).group() if re.search('\/\*[^^]*\*\/',attrs) else ''
-		if comment:
-			attrs = re.sub(re.escape(comment),'',attrs)
-		print 'comment',comment
-		#attrs = {prop.split(':')[0]:prop.split(':')[1] for prop in re.sub('{|}','',re.search('\{(.*?)\}',entry).group()).split(';') if prop.strip() }
-		print 'attrs',attrs
-		if not el: continue
-		if el in el_dict:
-			print 'Warning: Found multiple instances of:',el
-			sys.exit()
-		
-		#print el	
-		el_dict[el] = attrs
-	
-	sys.exit()
+		comments = re.findall('\/\*[^^]*?\*\/',attrs)
+		for c in comments:
+			attrs = re.sub(re.escape(c),'',attrs)
+			
+		el_dict[el] = {x.split(':')[0].strip():x.split(':')[1].strip() for x in [y for y in attrs.split(';') if y.strip()] if x.strip()} 
+		el_dict[el]['comments'] = comments
+
 
 	el_list = sorted(el_dict, key=lambda x: re.sub('^[\.\#]', '', x.lower()) )
 	
-	#for el in el_list:
-	#	el_form = '%s{\n%s\n}' % ( el, ''.join([x for x in el_dict[el] ) 
-	print el_dict
-	
-	
-	
-	doc = ''.join( [el_dict[y] for y in sorted(el_dict, key=lambda x: re.search('\w+.*',x.lower()).group()) ] )
-	
+
+	#gratuitous one-liner for new css doc generation
+	doc = '\n'.join( '%s{%s\n}' % (el, '\n\t'.join(sorted( '%s:%s;' % (prop, el_dict[el][prop]) if prop != 'comments' else   (  '\n\t'.join([c if (c and len(el_dict[el][prop])) > 1 else '\n\t'+el_dict[el][prop][0] for c in el_dict[el][prop]  ]) ) for prop in el_dict[el]  ) ) ) for el in el_list )
+
 	with open(filepath, 'w') as f:
 		f.write(doc)
 
