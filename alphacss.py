@@ -55,7 +55,7 @@ def main():
 	
 	el_dict = {}
 	
-	els = [re.sub('\ {2,}',' ',re.sub('\n\t|\n|\t(?<=\;)','',x).replace('\t',' ')) for x in re.findall('[^{}]*\{[^{}]*\}',doc)]
+	els = [ re.sub('\ {2,}',' ',re.sub('\n\t|\n|\t(?<=\;)','',x).strip().replace('\t',' ')) for x in re.findall('[^{}]*\{[^{}]*\}',doc) ]
 	
 	for entry in els: 
 		el = re.search('.*(?={)',entry).group()
