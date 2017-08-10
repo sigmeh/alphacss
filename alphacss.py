@@ -29,6 +29,19 @@ Then:
 	5.  Separate element selector from attributes and remove curly braces
 	6.  Extract comments from attrs string
 	7.  Create dict obj for each css element, composed of css { property1: value1, prop2: val2, ... } pairs
+			7a. Merge property:value lists for identical css selectors (and overwrite any previous val for
+				identical elements with multiple identical property assignments
+					e.g., 
+						#box{
+							color:red;
+						}
+						#box{
+							color:black;
+						}
+					results in:
+						#box{
+							color:black;
+						}
 	8.  Add 'comments' property to el_dict[el], as list of /* ... */ comments
 	9.  Sort elements alphabetically as el_list, ignoring any starting '.' or '#'
 	10. Create new css doc formatted for viewing as standard css file	
@@ -41,6 +54,9 @@ import sys
 
 
 def main():
+
+	print '----====  alphacss.py  ====----'
+	
 	if len(sys.argv) > 1:
 		filepath = sys.argv[1]
 	else:
@@ -57,15 +73,26 @@ def main():
 	
 	els = [ re.sub('\ {2,}',' ',re.sub('\n\t|\n|\t(?<=\;)','',x).strip().replace('\t',' ')) for x in re.findall('[^{}]*\{[^{}]*\}',doc) ]
 	
+	
+	
 	for entry in els: 
 		el = re.search('.*(?={)',entry).group()
 		attrs = re.sub('{|}','',re.search('\{(.*?)\}',entry).group())
 		comments = re.findall('\/\*[^^]*?\*\/',attrs)
-		for c in comments:
+		for c in comments:			# remove comments from attrs list for each element
 			attrs = re.sub(re.escape(c),'',attrs)
-			
-		el_dict[el] = {x.split(':')[0].strip():x.split(':')[1].strip() for x in [y for y in attrs.split(';') if y.strip()] if x.strip()} 
-		el_dict[el]['comments'] = comments
+		
+		attr_dict = {x.split(':')[0].strip():x.split(':')[1].strip() for x in [y for y in attrs.split(';') if y.strip()] if x.strip()} 
+		if not el_dict.get(el):	
+			el_dict[el] = attr_dict
+			el_dict[el]['comments'] = comments
+		else:
+			for attr_key in attr_dict:
+				attr_val = attr_dict[attr_key]
+				if el_dict[el].get(attr_key):
+					print 'Warning: css element "%s" has conflicting assignments for "%s": both "%s" and "%s"' % (el, attr_key, el_dict[el][attr_key], attr_val)
+					print 'Note: The former is being overwritten. The property will be "%s : %s"' % ( attr_key, attr_val )
+				el_dict[el].update( { attr_key : attr_dict[attr_key] } )
 
 
 	el_list = sorted(el_dict, key=lambda x: re.sub('^[\.\#]', '', x.lower()) )
@@ -73,7 +100,7 @@ def main():
 
 	#gratuitous one-liner for new css doc generation
 	doc = '\n'.join( '%s{%s\n}' % (el, '\n\t'.join(sorted( '%s:%s;' % (prop, el_dict[el][prop]) if prop != 'comments' else   (  '\n\t'.join([c if (c and len(el_dict[el][prop])) > 1 else '\n\t'+el_dict[el][prop][0] for c in el_dict[el][prop]  ]) ) for prop in el_dict[el]  ) ) ) for el in el_list )
-
+	
 	with open(filepath, 'w') as f:
 		f.write(doc)
 
