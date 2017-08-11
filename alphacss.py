@@ -70,36 +70,100 @@ def main():
 		f.write(doc)
 	
 	el_dict = {}
-	
-	els = [ re.sub('\ {2,}',' ',re.sub('\n\t|\n|\t(?<=\;)','',x).strip().replace('\t',' ')) for x in re.findall('[^{}]*\{[^{}]*\}',doc) ]
-	
-	
+	els 	= [ re.sub('\ {2,}',' ',re.sub('\n\t|\n|\t(?<=\;)','',x).strip().replace('\t',' ')) for x in re.findall('[^{}]*\{[^{}]*\}',doc) ]
 	
 	for entry in els: 
+		
 		el = re.search('.*(?={)',entry).group()
 		attrs = re.sub('{|}','',re.search('\{(.*?)\}',entry).group())
-		comments = re.findall('\/\*[^^]*?\*\/',attrs)
-		for c in comments:			# remove comments from attrs list for each element
-			attrs = re.sub(re.escape(c),'',attrs)
 		
-		attr_dict = {x.split(':')[0].strip():x.split(':')[1].strip() for x in [y for y in attrs.split(';') if y.strip()] if x.strip()} 
-		if not el_dict.get(el):	
-			el_dict[el] = attr_dict
-			el_dict[el]['comments'] = comments
-		else:
-			for attr_key in attr_dict:
-				attr_val = attr_dict[attr_key]
-				if el_dict[el].get(attr_key):
-					print 'Warning: css element "%s" has conflicting assignments for "%s": both "%s" and "%s"' % (el, attr_key, el_dict[el][attr_key], attr_val)
-					print 'Note: The former is being overwritten. The property will be "%s : %s"' % ( attr_key, attr_val )
-				el_dict[el].update( { attr_key : attr_dict[attr_key] } )
+		comment_blocks = re.findall('\/\*[^^]*\*\/',attrs)
+		comments = []
+		
+		for i,c in enumerate(comment_blocks):			# remove comments from attrs list for each element
+			attrs = re.sub(re.escape(c),'',attrs)			
+			comments = [ tuple(x.split(':')) for x in re.sub('\/\*|\*\/','',c).split(';') if x]
 
+		prop_pair_keys = []			# Transferring to list usage to avoid overwriting dictionary entries for duplicate/conflicting property assignments (both are retained)
+		prop_pair_vals = []
+		
+		for line in attrs.split(';'):
+			if not line: continue
+			prop_pair = line.split(':')
+			if prop_pair[0] in prop_pair_keys:
+				print 'Warning: multiple identical property assignments to "%s":\n\t"%s:%s"\n\t"%s:%s"' % (el, prop_pair[0], prop_pair_vals[prop_pair_keys.index(prop_pair[0])], prop_pair[0], prop_pair[1])
+				
+			prop_pair_keys.append(prop_pair[0])
+			prop_pair_vals.append(prop_pair[1])
 
-	el_list = sorted(el_dict, key=lambda x: re.sub('^[\.\#]', '', x.lower()) )
+		if not el_dict.get(el):		
+			# add new element to el_dict			
+			el_dict[el] = {
+				'keys'		: prop_pair_keys,
+				'vals'		: prop_pair_vals,
+				'props'		: [(prop_pair_keys[i],prop_pair_vals[i]) for i in range(len(prop_pair_keys))],
+				'comments'	: comments	
+			}
+
+		else:		
+			# merge data from identical elements				
+			for i in range(len(prop_pair_keys)):
+				if prop_pair_keys[i] in el_dict[el][keys]:
+					print 'Warning: multiple identical property assignments to "%s":\n\t"%s : %s"\n\t"%s : %s"' % ( el, prop_pair_keys[i], el_dict[el][vals][el_dict[el][keys].index(prop_pair_keys[i])], prop_pair_keys[i], prop_pair_vals[i] )
+				el_dict[el][keys].append(prop_pair_keys[i])
+				el_dict[el].append(prop_pair_vals[i])
 	
+	
+	# Remake the document
+	
+	doc = ''
+	el_list = sorted(el_dict, key=lambda x: re.sub('^[\.\#]', '', x.lower()) )	# alphabetical element list (ignore # .)		
+	for el in el_list:
+		doc += '%s{\n' % el
+	
+		for k,v in sorted(el_dict[el]['props'], key = lambda x: x[0]):			
+			doc += '\t%s:%s;\n' % ( k,v )
+			# restricting sort to property name only keeps duplicate element property assignments in their original order 
 
-	#gratuitous one-liner for new css doc generation
-	doc = '\n'.join( '%s{%s\n}' % (el, '\n\t'.join(sorted( '%s:%s;' % (prop, el_dict[el][prop]) if prop != 'comments' else   (  '\n\t'.join([c if (c and len(el_dict[el][prop])) > 1 else '\n\t'+el_dict[el][prop][0] for c in el_dict[el][prop]  ]) ) for prop in el_dict[el]  ) ) ) for el in el_list )
+		if not el_dict[el]['comments']: continue
+		
+		doc += '\t/*\n'
+		for c in sorted(el_dict[el]['comments'], key = lambda x: x[0]):
+			doc += '\t%s:%s;\n' % ( c[0], c[1] )
+		doc += '\t*/\n'
+		
+	doc += '}\n'
+
+	print doc
+	sys.exit()
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	with open(filepath, 'w') as f:
 		f.write(doc)
